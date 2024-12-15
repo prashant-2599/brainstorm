@@ -1,0 +1,15 @@
+--2024-12-15 18:00:42--  https://www.google.com/imgres?q=wordpress
+Resolving www.google.com (www.google.com)... 172.217.194.99, 172.217.194.105, 172.217.194.147, ...
+Connecting to www.google.com (www.google.com)|172.217.194.99|:443... connected.
+HTTP request sent, awaiting response... 301 Moved Permanently
+Location: https://www.google.com/imghp [following]
+--2024-12-15 18:00:42--  https://www.google.com/imghp
+Reusing existing connection to www.google.com:443.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: ‘imgres?q=wordpress’
+
+imgres?q=wordpress      [<=>                 ]       0  --.-KB/s               imgres?q=wordpress      [ <=>                ]  17.45K  --.-KB/s    in 0s      
+
+2024-12-15 18:00:42 (110 MB/s) - ‘imgres?q=wordpress’ saved [17870]
+
