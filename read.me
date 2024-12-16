@@ -1,206 +1,297 @@
 # WordPress Deployment on AWS EC2 with LEMP Stack and GitHub Actions
 
-This project sets up a secure, performant WordPress website on an AWS EC2 instance using the LEMP stack (Linux, Nginx, MySQL/MariaDB, and PHP). It also includes automated deployment using GitHub Actions and ensures security best practices, including SSL/TLS with Let's Encrypt.
-
----
+This guide provides step-by-step instructions to set up a secure and performant WordPress website using a **LEMP stack** (Linux, Nginx, MySQL/MariaDB, and PHP) on an AWS EC2 instance. The deployment is automated using **GitHub Actions** and follows best practices for security and optimization.
 
 ## Table of Contents
 
-1. [Project Overview](#project-overview)
-2. [Prerequisites](#prerequisites)
-3. [Step-by-Step Instructions](#step-by-step-instructions)
-    - [Provisioning the EC2 Instance](#provisioning-the-ec2-instance)
-    - [Installing the LEMP Stack](#installing-the-lemp-stack)
-    - [Setting Up WordPress](#setting-up-wordpress)
-    - [Configuring SSL/TLS](#configuring-ssltls)
-    - [Setting Up GitHub Actions](#setting-up-github-actions)
-4. [GitHub Actions Workflow](#github-actions-workflow)
-5. [Testing and Final Deployment](#testing-and-final-deployment)
-6. [Project Documentation](#project-documentation)
-7. [Live Demo](#live-demo)
+1. [Provision AWS EC2 Instance](#provision-aws-ec2-instance)
+2. [Install and Configure LEMP Stack](#install-and-configure-lemp-stack)
+3. [Set Up WordPress](#set-up-wordpress)
+4. [Implement SSL/TLS with Let's Encrypt](#implement-ssltls-with-lets-encrypt)
+5. [Optimize Nginx Configuration](#optimize-nginx-configuration)
+6. [Set Up GitHub Actions for CI/CD](#set-up-github-actions-for-cicd)
+7. [Final Testing and Documentation](#final-testing-and-documentation)
 
 ---
 
-## Project Overview
-
-This project covers:
-
-- Hosting WordPress on an **AWS EC2** instance with an **Ubuntu 22.04** server.
-- Setting up a **LEMP stack** (Linux, Nginx, MySQL/MariaDB, PHP).
-- Automating deployments via **GitHub Actions**.
-- Securing the website with **SSL/TLS** using Let's Encrypt.
-- Optimizing Nginx configuration for caching and compression.
-
----
-
-## Prerequisites
-
-Before starting, ensure you have:
-
-1. **AWS Account** with access to launch EC2 instances.
-2. **SSH Key Pair** for accessing the EC2 instance.
-3. **GitHub Account** for storing the repository.
-4. **Domain Name** (optional) for setting up SSL.
-5. **Git Installed** on your local machine.
-
----
-
-## Step-by-Step Instructions
-
-### 1. Provisioning the EC2 Instance
+## 1. Provision AWS EC2 Instance
 
 1. **Launch an EC2 Instance**:
-   - Go to the AWS EC2 Dashboard.
-   - Launch an **Ubuntu 22.04** instance (Free Tier eligible, `t2.micro`).
-   - Configure security groups to allow:
-     - HTTP (80)
-     - HTTPS (443)
-     - SSH (22) (restrict to your IP).
+    - Go to the [AWS EC2 Console](https://console.aws.amazon.com/ec2/).
+    - Select **Ubuntu 22.04** AMI (Amazon Machine Image).
+    - Choose a **t2.micro** instance (Free Tier eligible).
+    - Create a new key pair (e.g., `wordpress-key.pem`).
+    - Configure a Security Group to allow:
+      - **HTTP (80)**
+      - **HTTPS (443)**
+      - **SSH (22)** (restricted to your IP address).
 
-2. **SSH into the Instance**:
+2. **Connect to the Instance**:
+
    ```bash
    ssh -i your-key.pem ubuntu@<your-ec2-public-ip>
    ```
 
-### 2. Installing the LEMP Stack
+---
 
-1. **Update System**:
+## 2. Install and Configure LEMP Stack
+
+### Update the System
+
+```bash
+sudo apt update -y
+sudo apt upgrade -y
+```
+
+### Install Nginx
+
+```bash
+sudo apt install nginx -y
+sudo systemctl start nginx
+sudo systemctl enable nginx
+```
+
+### Install MariaDB
+
+```bash
+sudo apt install mariadb-server -y
+sudo systemctl start mariadb
+sudo systemctl enable mariadb
+```
+
+### Secure MySQL Installation
+
+```bash
+sudo mysql_secure_installation
+```
+
+### Install PHP
+
+```bash
+sudo apt install php-fpm php-mysql php-cli php-gd php-curl php-xml php-mbstring -y
+```
+
+### Configure PHP
+
+Edit the PHP configuration file to set `cgi.fix_pathinfo` to `0`:
+
+```bash
+sudo nano /etc/php/7.4/fpm/php.ini
+```
+
+Change the line to:
+
+```ini
+cgi.fix_pathinfo=0
+```
+
+### Configure Nginx for PHP
+
+Edit the Nginx configuration file:
+
+```bash
+sudo nano /etc/nginx/sites-available/default
+```
+
+Add the following server block:
+
+```nginx
+server {
+    listen 80;
+    server_name example.com;
+
+    root /var/www/html/wordpress;
+    index index.php index.html index.htm;
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/var/run/php/php7.4-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
+
+    location ~ /\.ht {
+        deny all;
+    }
+}
+```
+
+### Restart Nginx
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+---
+
+## 3. Set Up WordPress
+
+### Download WordPress
+
+```bash
+cd /var/www/html
+sudo wget https://wordpress.org/latest.tar.gz
+sudo tar -xvzf latest.tar.gz
+sudo chown -R www-data:www-data wordpress/
+sudo chmod -R 755 wordpress/
+```
+
+### Create MySQL Database
+
+```bash
+sudo mysql -u root -p
+```
+
+Run the following SQL commands:
+
+```sql
+CREATE DATABASE wordpress;
+CREATE USER 'wp_user'@'localhost' IDENTIFIED BY 'strongpassword';
+GRANT ALL PRIVILEGES ON wordpress.* TO 'wp_user'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;
+```
+
+### Configure WordPress
+
+```bash
+cd /var/www/html/wordpress
+sudo cp wp-config-sample.php wp-config.php
+sudo nano wp-config.php
+```
+
+Update the database settings:
+
+```php
+define('DB_NAME', 'wordpress');
+define('DB_USER', 'wp_user');
+define('DB_PASSWORD', 'strongpassword');
+define('DB_HOST', 'localhost');
+```
+
+### Complete Installation
+
+Navigate to `http://<your-ec2-public-ip>/wordpress` in your browser to finish the WordPress setup.
+
+---
+
+## 4. Implement SSL/TLS with Let's Encrypt
+
+### Install Certbot
+
+```bash
+sudo apt install certbot python3-certbot-nginx -y
+```
+
+### Obtain SSL Certificate
+
+```bash
+sudo certbot --nginx -d example.com
+```
+
+### Auto-Renew SSL
+
+```bash
+sudo certbot renew --dry-run
+```
+
+---
+
+## 5. Optimize Nginx Configuration
+
+### Enable Caching
+
+Add to the server block in Nginx:
+
+```nginx
+location ~* \.(jpg|jpeg|png|gif|css|js|woff|woff2|ttf|svg)$ {
+    expires 365d;
+}
+```
+
+### Enable Gzip Compression
+
+Add to `/etc/nginx/nginx.conf`:
+
+```nginx
+gzip on;
+gzip_types text/plain text/css application/json application/javascript text/javascript application/xml application/xml+rss text/javascript;
+gzip_min_length 1000;
+```
+
+### Reload Nginx
+
+```bash
+sudo systemctl reload nginx
+```
+
+---
+
+## 6. Set Up GitHub Actions for CI/CD
+
+### GitHub Actions Workflow
+
+Create a `.github/workflows/deploy.yml` file:
+
+```yaml
+name: Deploy WordPress
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.5.3
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Deploy to VPS
+        run: |
+          ssh -o StrictHostKeyChecking=no ubuntu@<your-ec2-public-ip> << 'EOF'
+            cd /var/www/html/wordpress
+            git pull origin main
+            sudo systemctl restart nginx
+          EOF
+```
+
+### Add SSH Key to GitHub Secrets
+
+1. **Generate an SSH Key Pair**:
+
    ```bash
-   sudo apt update -y
-   sudo apt upgrade -y
+   ssh-keygen -t rsa -b 2048 -C "your-email@example.com"
    ```
 
-2. **Install Nginx**:
+2. **Add the Private Key to GitHub Secrets** (`Settings > Secrets > New Repository Secret`):
+
+   - **Name**: `SSH_PRIVATE_KEY`
+   - **Value**: Paste the private key.
+
+3. **Add the Public Key to EC2**:
+
    ```bash
-   sudo apt install nginx -y
-   sudo systemctl start nginx
-   sudo systemctl enable nginx
-   ```
-
-3. **Install MySQL/MariaDB**:
-   ```bash
-   sudo apt install mariadb-server -y
-   sudo systemctl start mariadb
-   sudo systemctl enable mariadb
-   sudo mysql_secure_installation
-   ```
-
-4. **Install PHP**:
-   ```bash
-   sudo apt install php-fpm php-mysql php-cli php-gd php-curl php-xml php-mbstring -y
-   ```
-
-5. **Configure Nginx for PHP**:
-   Update `/etc/nginx/sites-available/default` with PHP support.
-   
-   
-
-### 3. Setting Up WordPress
-
-1. **Download WordPress**:
-   ```bash
-   cd /var/www/html
-   sudo wget https://wordpress.org/latest.tar.gz
-   sudo tar -xvzf latest.tar.gz
-   sudo chown -R www-data:www-data wordpress/
-   sudo chmod -R 755 wordpress/
-   ```
-
-2. **Create a MySQL Database**:
-   ```bash
-   sudo mysql -u root -p
-   CREATE DATABASE wordpress;
-   CREATE USER 'wp_user'@'localhost' IDENTIFIED BY 'strongpassword';
-   GRANT ALL PRIVILEGES ON wordpress.* TO 'wp_user'@'localhost';
-   FLUSH PRIVILEGES;
-   EXIT;
-   ```
-
-3. **Configure WordPress**:
-   ```bash
-   cd /var/www/html/wordpress
-   sudo cp wp-config-sample.php wp-config.php
-   sudo nano wp-config.php
-   ```
-   Update database settings:
-   ```php
-   define('DB_NAME', 'wordpress');
-   define('DB_USER', 'wp_user');
-   define('DB_PASSWORD', 'strongpassword');
-   define('DB_HOST', 'localhost');
-   ```
-
-### 4. Configuring SSL/TLS
-
-1. **Install Certbot**:
-   ```bash
-   sudo apt install certbot python3-certbot-nginx -y
-   ```
-
-2. **Obtain SSL Certificate**:
-   ```bash
-   sudo certbot --nginx -d your-domain.com
-   ```
-
-### 5. Setting Up GitHub Actions
-
-1. **Add SSH Key to GitHub Secrets**:
-   - Generate an SSH key:
-     ```bash
-     ssh-keygen -t rsa -b 4096 -C "your-email@example.com"
-     ```
-   - Add the private key to **GitHub Secrets** (`SSH_PRIVATE_KEY`).
-   - Add the public key to `~/.ssh/authorized_keys` on your EC2 instance.
-
-2. **Create a GitHub Actions Workflow**:
-
-   In `.github/workflows/deploy.yml`:
-
-   ```yaml
-   name: Deploy WordPress
-
-   on:
-     push:
-       branches:
-         - main
-
-   jobs:
-     deploy:
-       runs-on: ubuntu-latest
-
-       steps:
-         - name: Checkout repository
-           uses: actions/checkout@v2
-
-         - name: Set up SSH
-           uses: webfactory/ssh-agent@v0.5.3
-           with:
-             ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-         - name: Deploy to VPS
-           run: |
-             ssh -o StrictHostKeyChecking=no ubuntu@<your-ec2-public-ip> << 'EOF'
-               cd /var/www/html/
-               git pull origin main
-               sudo systemctl restart nginx
-               EOF
+   cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
    ```
 
 ---
 
-## Testing and Final Deployment
+## 7. Final Testing and Documentation
 
-1. **Push Changes to GitHub**:
-   ```bash
-   git add .
-   git commit -m "Initial WordPress deployment"
-   git push origin main
-   ```
+### Test Deployment
 
-2. **Verify GitHub Actions**:
-   - Go to **GitHub Actions** and ensure the workflow runs successfully.
-
-3. **Access Your Website**:
-   Navigate to `https://your-domain.com` or `http://<your-ec2-public-ip>/wordpress`.
-
----
+1. Push changes to the `main` branch of your repository.
+2. Ensure the deployment runs successfully via GitHub Actions.
