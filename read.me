@@ -76,7 +76,7 @@ sudo apt install php-fpm php-mysql php-cli php-gd php-curl php-xml php-mbstring 
 Edit the PHP configuration file to set `cgi.fix_pathinfo` to `0`:
 
 ```bash
-sudo nano /etc/php/7.4/fpm/php.ini
+sudo nano /etc/php/8.1/fpm/php.ini
 ```
 
 Change the line to:
@@ -100,7 +100,7 @@ server {
     listen 80;
     server_name example.com;
 
-    root /var/www/html/wordpress;
+    root /var/www/html;
     index index.php index.html index.htm;
 
     location / {
@@ -109,7 +109,7 @@ server {
 
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/var/run/php/php7.4-fpm.sock;
+        fastcgi_pass unix:/var/run/php/php8.1-fpm.sock;
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         include fastcgi_params;
     }
@@ -151,7 +151,7 @@ Run the following SQL commands:
 
 ```sql
 CREATE DATABASE wordpress;
-CREATE USER 'wp_user'@'localhost' IDENTIFIED BY 'strongpassword';
+CREATE USER 'wp_user'@'localhost' IDENTIFIED BY 'brain@123';
 GRANT ALL PRIVILEGES ON wordpress.* TO 'wp_user'@'localhost';
 FLUSH PRIVILEGES;
 EXIT;
@@ -170,7 +170,7 @@ Update the database settings:
 ```php
 define('DB_NAME', 'wordpress');
 define('DB_USER', 'wp_user');
-define('DB_PASSWORD', 'strongpassword');
+define('DB_PASSWORD', 'brain@123');
 define('DB_HOST', 'localhost');
 ```
 
@@ -191,7 +191,7 @@ sudo apt install certbot python3-certbot-nginx -y
 ### Obtain SSL Certificate
 
 ```bash
-sudo certbot --nginx -d example.com
+sudo certbot --nginx -d brainstorm123.ddns.net
 ```
 
 ### Auto-Renew SSL
@@ -230,6 +230,137 @@ gzip_min_length 1000;
 sudo systemctl reload nginx
 ```
 
+final /etc/nginx/sites-available/default
+
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+
+    root /var/www/html;
+    index index.html index.htm index.php;
+
+    server_name _;
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/var/run/php/php8.1-fpm.sock;  # Adjust PHP version if needed
+    }
+
+    location ~ /\.ht {
+        deny all;
+    }
+
+    # Caching configuration
+    location ~* \.(jpg|jpeg|png|gif|css|js|woff|woff2|ttf|svg)$ {
+        expires 365d;
+    }
+}
+
+server {
+    root /var/www/html;
+    index index.html index.htm index.php;
+    server_name brainstorm123.ddns.net; # managed by Certbot
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/var/run/php/php8.1-fpm.sock;  # Adjust PHP version if needed
+    }
+
+    location ~ /\.ht {
+        deny all;
+    }
+
+    # Caching configuration
+    location ~* \.(jpg|jpeg|png|gif|css|js|woff|woff2|ttf|svg)$ {
+        expires 365d;
+    }
+
+    listen [::]:443 ssl ipv6only=on; # managed by Certbot
+    listen 443 ssl; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/brainstorm123.ddns.net/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/brainstorm123.ddns.net/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+}
+
+server {
+    if ($host = brainstorm123.ddns.net) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+    listen 80;
+    listen [::]:80;
+    server_name brainstorm123.ddns.net;
+    return 404; # managed by Certbot
+}
+
+
+final nginx.conf
+
+user www-data;
+worker_processes auto;
+pid /run/nginx.pid;
+include /etc/nginx/modules-enabled/*.conf;
+
+events {
+    worker_connections 768;
+    # multi_accept on;
+}
+
+http {
+
+    ##
+    # Basic Settings
+    ##
+
+    sendfile on;
+    tcp_nopush on;
+    types_hash_max_size 2048;
+    # server_tokens off;
+
+    # server_names_hash_bucket_size 64;
+    # server_name_in_redirect off;
+
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
+    ##
+    # SSL Settings
+    ##
+
+    ssl_protocols TLSv1 TLSv1.1 TLSv1.2 TLSv1.3; # Dropping SSLv3, ref: POODLE
+    ssl_prefer_server_ciphers on;
+
+    ##
+    # Logging Settings
+    ##
+
+    access_log /var/log/nginx/access.log;
+    error_log /var/log/nginx/error.log;
+
+    ##
+    # Gzip Settings
+    ##
+
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/javascript application/xml application/xml+rss text/javascript;
+    gzip_min_length 1000;
+
+    ##
+    # Virtual Host Configs
+    ##
+
+    include /etc/nginx/conf.d/*.conf;
+    include /etc/nginx/sites-enabled/*;
+}
 ---
 
 ## 6. Set Up GitHub Actions for CI/CD
@@ -262,7 +393,7 @@ jobs:
       - name: Deploy to VPS
         run: |
           ssh -o StrictHostKeyChecking=no ubuntu@<your-ec2-public-ip> << 'EOF'
-            cd /var/www/html/wordpress
+            cd /var/www/html
             git pull origin main
             sudo systemctl restart nginx
           EOF
@@ -295,3 +426,20 @@ jobs:
 
 1. Push changes to the `main` branch of your repository.
 2. Ensure the deployment runs successfully via GitHub Actions.
+
+### Website URL
+
+Ensure your WordPress site is accessible at:
+
+```
+https://brainstorm123.ddns.net/
+```
+
+---
+
+## Repository Link
+
+Provide the link to your GitHub repository here:
+
+```
+https://github.com/prashant-2599/brainstorm
